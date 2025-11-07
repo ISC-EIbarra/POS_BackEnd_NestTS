@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { UpdateTransactionDto } from './dto/update-transaction.dto';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -7,6 +7,7 @@ import {
   TransactionContents,
 } from './entities/transaction.entity';
 import { Repository } from 'typeorm';
+import { Product } from 'src/products/entities/product.entity';
 
 @Injectable()
 export class TransactionsService {
@@ -15,6 +16,8 @@ export class TransactionsService {
     private readonly transactionRepository: Repository<Transaction>,
     @InjectRepository(TransactionContents)
     private readonly transactionContentsRepository: Repository<TransactionContents>,
+    @InjectRepository(Product)
+    private readonly productRepository: Repository<Product>,
   ) {}
 
   async create(createTransactionDto: CreateTransactionDto) {
@@ -23,9 +26,28 @@ export class TransactionsService {
     await this.transactionRepository.save(transaction);
 
     for (const contents of createTransactionDto.contents) {
+      const product = await this.productRepository.findOneBy({
+        id: contents.productId,
+      });
+
+      if (!product) {
+        throw new Error(
+          `El producto con ID ${contents.productId} no fue encontrado`,
+        );
+      }
+
+      if (contents.quantity > product.inventory) {
+        throw new BadRequestException(
+          `El articulo ${product.name} excede la cantidad disponible`,
+        );
+      }
+
+      product.inventory -= contents.quantity;
+
       await this.transactionContentsRepository.save({
         ...contents,
-        transaction,
+        transaction: transaction,
+        product: product,
       });
     }
 
