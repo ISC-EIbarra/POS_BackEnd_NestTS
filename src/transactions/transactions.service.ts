@@ -21,35 +21,42 @@ export class TransactionsService {
   ) {}
 
   async create(createTransactionDto: CreateTransactionDto) {
-    const transaction = new Transaction();
-    transaction.total = createTransactionDto.total;
-    await this.transactionRepository.save(transaction);
+    await this.productRepository.manager.transaction(
+      async (transactionEntityManager) => {
+        const transaction = new Transaction();
+        transaction.total = createTransactionDto.total;
 
-    for (const contents of createTransactionDto.contents) {
-      const product = await this.productRepository.findOneBy({
-        id: contents.productId,
-      });
+        for (const contents of createTransactionDto.contents) {
+          const product = await transactionEntityManager.findOneBy(Product, {
+            id: contents.productId,
+          });
 
-      if (!product) {
-        throw new Error(
-          `El producto con ID ${contents.productId} no fue encontrado`,
-        );
-      }
+          if (!product) {
+            throw new Error(
+              `El producto con ID ${contents.productId} no fue encontrado`,
+            );
+          }
 
-      if (contents.quantity > product.inventory) {
-        throw new BadRequestException(
-          `El articulo ${product.name} excede la cantidad disponible`,
-        );
-      }
+          if (contents.quantity > product.inventory) {
+            throw new BadRequestException(
+              `El articulo ${product.name} excede la cantidad disponible`,
+            );
+          }
 
-      product.inventory -= contents.quantity;
+          product.inventory -= contents.quantity;
 
-      await this.transactionContentsRepository.save({
-        ...contents,
-        transaction: transaction,
-        product: product,
-      });
-    }
+          //Create TransactionContent Instance
+          const transactionContent = new TransactionContents();
+          transactionContent.price = contents.price;
+          transactionContent.product = product;
+          transactionContent.quantity = contents.quantity;
+          transactionContent.transaction = transaction;
+
+          await transactionEntityManager.save(transaction);
+          await transactionEntityManager.save(transactionContent);
+        }
+      },
+    );
 
     return 'Venta Almacenada Correctamente';
   }
