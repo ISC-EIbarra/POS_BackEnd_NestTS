@@ -12,7 +12,7 @@ export const typeOrmConfig = (
   password: configService.get('DATABASE_PASSWORD'),
   database: configService.get('DATABASE_NAME'),
   ssl: true,
-  logging: true,
+  logging: false,
   entities: [join(__dirname + '../../**/*.entity.{js,ts}')],
   synchronize: true,
 });
